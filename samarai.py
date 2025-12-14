@@ -1,5 +1,5 @@
 import streamlit as st
-from openai import OpenAI
+import requests
 
 # ---------------- LOGIN SCREEN ----------------
 if "authenticated" not in st.session_state:
@@ -86,12 +86,19 @@ if user_input:
     st.chat_message("user").write(user_input)
 
     # Get AI response
-    response = client.chat.completions.create(
-        model="mistralai/mistral-7b-instruct",
-        messages=st.session_state.messages
-    )
+    response = requests.post(
+    "https://openrouter.ai/api/v1/chat/completions",
+    headers={
+        "Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "model": "mistralai/mistral-7b-instruct",
+        "messages": st.session_state.messages,
+    },
+)
 
-    reply = response.choices[0].message.content
+reply = response.json()["choices"][0]["message"]["content"]
 
     # Clean unwanted model tokens
     for token in ["<s>", "</s>", "[OUT]", "[/OUT]"]:
@@ -105,3 +112,4 @@ if user_input:
     )
     st.chat_message("assistant").write(reply)
 # ---------------- END CHAT ----------------
+
