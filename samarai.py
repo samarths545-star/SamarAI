@@ -1,4 +1,28 @@
 import streamlit as st
+
+# ---------- LOGIN SCREEN ----------
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.title("🔐 SamarAI Login")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        if (
+            username == st.secrets["APP_USERNAME"]
+            and password == st.secrets["APP_PASSWORD"]
+        ):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Invalid username or password")
+
+    st.stop()
+# ---------- END LOGIN SCREEN ----------
+import streamlit as st
 from openai import OpenAI
 
 st.set_page_config(page_title="SamarAI", layout="centered")
@@ -46,3 +70,4 @@ if user_input:
     reply = response.choices[0].message.content
     st.session_state.messages.append({"role": "assistant", "content": reply})
     st.chat_message("assistant").write(reply)
+
