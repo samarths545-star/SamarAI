@@ -34,14 +34,14 @@ st.title("🧠 SamarAI")
 
 # ---------------- SYSTEM PROMPT ----------------
 SYSTEM_PROMPT = """
-You are SamarAI, an instruction-following AI assistant.
+You are SamarAI, an AI assistant with internet access.
 
 Rules:
-- Respond clearly in plain text
-- No special tokens
-- No system tags
-- Follow user instructions accurately
-- Be concise unless asked otherwise
+- If the user asks for current, latest, real-time, or factual information,
+  you must use the provided web search results.
+- Do not hallucinate facts.
+- Answer clearly in plain text.
+- If web results are used, base your answer strictly on them.
 """
 # ---------------- END PROMPT ----------------
 
@@ -57,15 +57,50 @@ for msg in st.session_state.messages[1:]:
 # ---------------- END MEMORY ----------------
 
 
+# ---------------- HELPER: INTERNET SEARCH ----------------
+def internet_search(query):
+    response = requests.post(
+        "https://api.tavily.com/search",
+        headers={
+            "Content-Type": "application/json",
+        },
+        json={
+            "api_key": st.secrets["TAVILY_API_KEY"],
+            "query": query,
+            "search_depth": "basic",
+            "max_results": 5,
+        },
+        timeout=30,
+    )
+
+    data = response.json()
+
+    results_text = ""
+    for item in data.get("results", []):
+        results_text += f"- {item.get('title')}: {item.get('content')}\n"
+
+    return results_text
+# ---------------- END SEARCH ----------------
+
+
 # ---------------- CHAT INPUT ----------------
-user_input = st.chat_input("Talk to SamarAI...")
+user_input = st.chat_input("Ask SamarAI anything...")
 
 if user_input:
-    # Show user message
     st.session_state.messages.append(
         {"role": "user", "content": user_input}
     )
     st.chat_message("user").write(user_input)
+
+    # Decide if internet search is needed
+    needs_internet = any(
+        word in user_input.lower()
+        for word in ["latest", "current", "today", "news", "price", "update", "now"]
+    )
+
+    web_context = ""
+    if needs_internet:
+        web_context = internet_search(user_input)
 
     try:
         response = requests.post(
@@ -76,13 +111,18 @@ if user_input:
             },
             json={
                 "model": "mistralai/mistral-7b-instruct",
-                "messages": st.session_state.messages,
+                "messages": st.session_state.messages
+                + (
+                    [{"role": "system", "content": f"Web search results:\n{web_context}"}]
+                    if web_context
+                    else []
+                ),
             },
             timeout=30,
         )
 
         if response.status_code != 200:
-            st.error(f"OpenRouter error: {response.text}")
+            st.error(response.text)
             st.stop()
 
         reply = response.json()["choices"][0]["message"]["content"]
@@ -99,5 +139,5 @@ if user_input:
         st.chat_message("assistant").write(reply)
 
     except Exception as e:
-        st.error(f"Runtime error: {str(e)}")
+        st.error(str(e))
 # ---------------- END CHAT ----------------
