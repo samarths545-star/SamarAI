@@ -1,11 +1,12 @@
 import streamlit as st
 from openai import OpenAI
 
-# ---------- LOGIN ----------
+# ---------------- LOGIN SCREEN ----------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
+    st.set_page_config(page_title="SamarAI Login", layout="centered")
     st.title("🔐 SamarAI Login")
 
     username = st.text_input("Username")
@@ -22,39 +23,48 @@ if not st.session_state.authenticated:
             st.error("Invalid username or password")
 
     st.stop()
-# ---------- END LOGIN ----------
+# ---------------- END LOGIN ----------------
 
 
-# ---------- APP CONFIG ----------
+# ---------------- APP CONFIG ----------------
 st.set_page_config(page_title="SamarAI", layout="centered")
 st.title("🧠 SamarAI")
-# ---------- END CONFIG ----------
+# ---------------- END CONFIG ----------------
 
 
-# ---------- OPENROUTER CLIENT ----------
+# ---------------- OPENROUTER CLIENT ----------------
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=st.secrets["OPENROUTER_API_KEY"]
 )
-# ---------- END CLIENT ----------
+# ---------------- END CLIENT ----------------
 
 
-# ---------- SYSTEM PROMPT ----------
+# ---------------- SYSTEM PROMPT ----------------
 SYSTEM_PROMPT = """
-You are SamarAI, an instruction-following AI.
+You are SamarAI, an instruction-following AI assistant.
 
 Your highest priority is to follow user instructions accurately and carefully.
 
-RULES:
-- Treat user instructions as commands.
-- Ask clarifying questions if needed.
-- Do not hallucinate.
-- Be precise and structured.
+RULES YOU MUST FOLLOW:
+1. Treat user instructions as commands, not suggestions.
+2. Ask clarifying questions if instructions are unclear.
+3. Follow instructions step by step.
+4. Do NOT hallucinate facts or sources.
+5. If something is not possible, say so clearly.
+6. Adapt tone, format, and depth exactly as instructed.
+7. Be precise, structured, and honest at all times.
+
+DEFAULT BEHAVIOR:
+- Clear text only
+- No special tokens
+- No system tags
+- Professional and calm
 """
-# ---------- END PROMPT ----------
+# ---------------- END PROMPT ----------------
 
 
-# ---------- CHAT MEMORY ----------
+# ---------------- CHAT MEMORY ----------------
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": SYSTEM_PROMPT}
@@ -62,18 +72,20 @@ if "messages" not in st.session_state:
 
 for msg in st.session_state.messages[1:]:
     st.chat_message(msg["role"]).write(msg["content"])
-# ---------- END MEMORY ----------
+# ---------------- END MEMORY ----------------
 
 
-# ---------- CHAT INPUT ----------
+# ---------------- CHAT INPUT & RESPONSE ----------------
 user_input = st.chat_input("Talk to SamarAI...")
 
 if user_input:
+    # Show user message
     st.session_state.messages.append(
         {"role": "user", "content": user_input}
     )
     st.chat_message("user").write(user_input)
 
+    # Get AI response
     response = client.chat.completions.create(
         model="mistralai/mistral-7b-instruct",
         messages=st.session_state.messages
@@ -81,17 +93,15 @@ if user_input:
 
     reply = response.choices[0].message.content
 
-# Clean unwanted model tokens
-for token in ["<s>", "</s>", "[OUT]", "[/OUT]"]:
-    reply = reply.replace(token, "")
+    # Clean unwanted model tokens
+    for token in ["<s>", "</s>", "[OUT]", "[/OUT]"]:
+        reply = reply.replace(token, "")
 
-reply = reply.strip()
+    reply = reply.strip()
 
-
+    # Show assistant message
     st.session_state.messages.append(
         {"role": "assistant", "content": reply}
     )
     st.chat_message("assistant").write(reply)
-# ---------- END CHAT ----------
-
-
+# ---------------- END CHAT ----------------
