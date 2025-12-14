@@ -81,8 +81,15 @@ if user_input:
 
     reply = response.choices[0].message.content
 
+    # Clean unwanted model tokens
+    for token in ["<s>", "</s>", "[OUT]", "[/OUT]"]:
+    reply = reply.replace(token, "")
+
+    reply = reply.strip()
+
     st.session_state.messages.append(
         {"role": "assistant", "content": reply}
     )
     st.chat_message("assistant").write(reply)
 # ---------- END CHAT ----------
+
