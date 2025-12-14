@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-# ---------------- LOGIN SCREEN ----------------
+# ---------------- LOGIN ----------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -26,40 +26,22 @@ if not st.session_state.authenticated:
 # ---------------- END LOGIN ----------------
 
 
-# ---------------- APP CONFIG ----------------
+# ---------------- APP UI ----------------
 st.set_page_config(page_title="SamarAI", layout="centered")
 st.title("🧠 SamarAI")
-# ---------------- END CONFIG ----------------
-
-
-# ---------------- OPENROUTER CLIENT ----------------
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=st.secrets["OPENROUTER_API_KEY"]
-)
-# ---------------- END CLIENT ----------------
+# ---------------- END UI ----------------
 
 
 # ---------------- SYSTEM PROMPT ----------------
 SYSTEM_PROMPT = """
 You are SamarAI, an instruction-following AI assistant.
 
-Your highest priority is to follow user instructions accurately and carefully.
-
-RULES YOU MUST FOLLOW:
-1. Treat user instructions as commands, not suggestions.
-2. Ask clarifying questions if instructions are unclear.
-3. Follow instructions step by step.
-4. Do NOT hallucinate facts or sources.
-5. If something is not possible, say so clearly.
-6. Adapt tone, format, and depth exactly as instructed.
-7. Be precise, structured, and honest at all times.
-
-DEFAULT BEHAVIOR:
-- Clear text only
+Rules:
+- Respond clearly in plain text
 - No special tokens
 - No system tags
-- Professional and calm
+- Follow user instructions accurately
+- Be concise unless asked otherwise
 """
 # ---------------- END PROMPT ----------------
 
@@ -75,7 +57,7 @@ for msg in st.session_state.messages[1:]:
 # ---------------- END MEMORY ----------------
 
 
-# ---------------- CHAT INPUT & RESPONSE ----------------
+# ---------------- CHAT INPUT ----------------
 user_input = st.chat_input("Talk to SamarAI...")
 
 if user_input:
@@ -85,31 +67,37 @@ if user_input:
     )
     st.chat_message("user").write(user_input)
 
-    # Get AI response
-    response = requests.post(
-    "https://openrouter.ai/api/v1/chat/completions",
-    headers={
-        "Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}",
-        "Content-Type": "application/json",
-    },
-    json={
-        "model": "mistralai/mistral-7b-instruct",
-        "messages": st.session_state.messages,
-    },
-)
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "mistralai/mistral-7b-instruct",
+                "messages": st.session_state.messages,
+            },
+            timeout=30,
+        )
 
-reply = response.json()["choices"][0]["message"]["content"]
+        if response.status_code != 200:
+            st.error(f"OpenRouter error: {response.text}")
+            st.stop()
 
-    # Clean unwanted model tokens
-    for token in ["<s>", "</s>", "[OUT]", "[/OUT]"]:
-        reply = reply.replace(token, "")
+        reply = response.json()["choices"][0]["message"]["content"]
 
-    reply = reply.strip()
+        # Clean unwanted tokens
+        for token in ["<s>", "</s>", "[OUT]", "[/OUT]"]:
+            reply = reply.replace(token, "")
 
-    # Show assistant message
-    st.session_state.messages.append(
-        {"role": "assistant", "content": reply}
-    )
-    st.chat_message("assistant").write(reply)
+        reply = reply.strip()
+
+        st.session_state.messages.append(
+            {"role": "assistant", "content": reply}
+        )
+        st.chat_message("assistant").write(reply)
+
+    except Exception as e:
+        st.error(f"Runtime error: {str(e)}")
 # ---------------- END CHAT ----------------
-
