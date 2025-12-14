@@ -36,12 +36,12 @@ st.title("🧠 SamarAI")
 SYSTEM_PROMPT = """
 You are SamarAI, an AI assistant with internet access.
 
-Rules:
-- If the user asks for current, latest, real-time, or factual information,
-  you must use the provided web search results.
-- Do not hallucinate facts.
+MANDATORY RULES:
+- If internet search results are provided, you MUST use them.
+- Never say you do not have internet access.
+- Never give generic or outdated answers when web data is present.
 - Answer clearly in plain text.
-- If web results are used, base your answer strictly on them.
+- Be factual, direct, and concise.
 """
 # ---------------- END PROMPT ----------------
 
@@ -57,7 +57,7 @@ for msg in st.session_state.messages[1:]:
 # ---------------- END MEMORY ----------------
 
 
-# ---------------- HELPER: INTERNET SEARCH ----------------
+# ---------------- INTERNET SEARCH (TAVILY) ----------------
 def internet_search(query):
     response = requests.post(
         "https://api.tavily.com/search",
@@ -87,6 +87,7 @@ def internet_search(query):
 user_input = st.chat_input("Ask SamarAI anything...")
 
 if user_input:
+    # Show user message
     st.session_state.messages.append(
         {"role": "user", "content": user_input}
     )
@@ -95,7 +96,10 @@ if user_input:
     # Decide if internet search is needed
     needs_internet = any(
         word in user_input.lower()
-        for word in ["latest", "current", "today", "news", "price", "update", "now"]
+        for word in [
+            "latest", "current", "today", "now",
+            "news", "price", "time", "update"
+        ]
     )
 
     web_context = ""
@@ -103,6 +107,19 @@ if user_input:
         web_context = internet_search(user_input)
 
     try:
+        # FORCE usage of web results
+        messages = st.session_state.messages.copy()
+
+        if web_context:
+            messages.append({
+                "role": "user",
+                "content": (
+                    "The following information was retrieved from the internet "
+                    "and is current. You MUST use it to answer the question.\n\n"
+                    f"{web_context}"
+                )
+            })
+
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -111,18 +128,13 @@ if user_input:
             },
             json={
                 "model": "mistralai/mistral-7b-instruct",
-                "messages": st.session_state.messages
-                + (
-                    [{"role": "system", "content": f"Web search results:\n{web_context}"}]
-                    if web_context
-                    else []
-                ),
+                "messages": messages,
             },
             timeout=30,
         )
 
         if response.status_code != 200:
-            st.error(response.text)
+            st.error(f"OpenRouter error: {response.text}")
             st.stop()
 
         reply = response.json()["choices"][0]["message"]["content"]
@@ -139,5 +151,5 @@ if user_input:
         st.chat_message("assistant").write(reply)
 
     except Exception as e:
-        st.error(str(e))
+        st.error(f"Runtime error: {str(e)}")
 # ---------------- END CHAT ----------------
